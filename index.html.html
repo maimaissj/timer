@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- iOS ホーム画面に追加したときの設定 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="労働タイマー">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <title>実労働時間タイマー</title>
+  <style>
+    *, *::before, *::after {
+      -webkit-box-sizing: border-box;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      height: -webkit-fill-available;
+    }
+
+    body {
+      font-family: -apple-system, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-justify-content: center;
+      justify-content: center;
+      padding: 24px;
+      /* iPhone X以降のノッチ・ホームバー対応 */
+      padding-top: calc(24px + env(safe-area-inset-top));
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+      padding-left: calc(16px + env(safe-area-inset-left));
+      padding-right: calc(16px + env(safe-area-inset-right));
+      /* iOS Safariのフォント自動拡大を防ぐ */
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      -webkit-box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 40px 36px 32px;
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 28px;
+      text-align: center;
+      letter-spacing: 0.04em;
+    }
+
+    /* 時計表示 */
+    .timer-display {
+      background: #1a1a2e;
+      background: -webkit-linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-radius: 14px;
+      padding: 28px 20px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .timer-label {
+      font-size: 0.78rem;
+      color: #8892b0;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .timer-value {
+      /* clamp はSafari 13.1(iOS 13.4)以上で対応 */
+      font-size: 3.2rem;
+      font-size: clamp(2.4rem, 11vw, 3.2rem);
+      font-weight: 700;
+      color: #e2e8f0;
+      letter-spacing: 0.05em;
+      -webkit-font-feature-settings: "tnum";
+      font-feature-settings: "tnum";
+    }
+
+    .sub-times {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-justify-content: space-around;
+      justify-content: space-around;
+      margin-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 14px;
+    }
+
+    .sub-item { text-align: center; }
+
+    .sub-item .label {
+      font-size: 0.7rem;
+      color: #8892b0;
+      margin-bottom: 3px;
+    }
+
+    .sub-item .value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #a8b2d8;
+      -webkit-font-feature-settings: "tnum";
+      font-feature-settings: "tnum";
+    }
+
+    /* ステータス */
+    .status-badge {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 20px;
+      border-radius: 99px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: #e9ecef;
+      color: #6c757d;
+    }
+
+    .badge.working  { background: #d1fae5; color: #065f46; }
+    .badge.breaking { background: #fef3c7; color: #92400e; }
+    .badge.ended    { background: #e0e7ff; color: #3730a3; }
+
+    /* ボタン */
+    .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      -webkit-appearance: none;
+      appearance: none;
+      /* Appleのタップ対象の推奨サイズ 44pt 以上 */
+      min-height: 52px;
+      padding: 14px 8px;
+      border: none;
+      border-radius: 11px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-transition: opacity 0.15s, -webkit-transform 0.12s;
+      transition: opacity 0.15s, transform 0.12s;
+      /* ダブルタップズームを無効化してタップ遅延を除去 */
+      touch-action: manipulation;
+      /* タップ時のハイライトを非表示 */
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .btn:active {
+      -webkit-transform: scale(0.97);
+      transform: scale(0.97);
+      opacity: 0.82;
+    }
+
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      -webkit-transform: none;
+      transform: none;
+    }
+
+    .btn-start  { background: #10b981; color: #fff; }
+    .btn-break  { background: #f59e0b; color: #fff; }
+    .btn-resume { background: #3b82f6; color: #fff; }
+    .btn-end    { background: #ef4444; color: #fff; }
+
+    /* 設定トグル */
+    .setting {
+      display: -webkit-flex;
+      display: flex;
+      -webkit-align-items: center;
+      align-items: center;
+      -webkit-justify-content: space-between;
+      justify-content: space-between;
+      background: #f8f9fa;
+      border-radius: 11px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+    }
+
+    .setting-label {
+      font-size: 0.85rem;
+      color: #374151;
+      font-weight: 500;
+      padding-right: 12px;
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      -webkit-flex-shrink: 0;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      /* iOSデフォルトのチェックボックス外観を除去 */
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .slider {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #d1d5db;
+      border-radius: 99px;
+      cursor: pointer;
+      -webkit-transition: background 0.2s;
+      transition: background 0.2s;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      -webkit-box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      -webkit-transition: -webkit-transform 0.2s;
+      transition: transform 0.2s;
+    }
+
+    .toggle input:checked + .slider { background: #10b981; }
+
+    .toggle input:checked + .slider::before {
+      -webkit-transform: translateX(20px);
+      transform: translateX(20px);
+    }
+
+    /* コピーエリア */
+    .copy-section {
+      background: #f8f9fa;
+      border-radius: 11px;
+      padding: 16px;
+    }
+
+    .copy-label {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-bottom: 8px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+    }
+
+    .copy-row {
+      display: -webkit-flex;
+      display: flex;
+      gap: 8px;
+      -webkit-align-items: center;
+      align-items: center;
+    }
+
+    .copy-text {
+      -webkit-flex: 1;
+      flex: 1;
+      min-width: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1a1a2e;
+      background: transparent;
+      border: none;
+      outline: none;
+      -webkit-font-feature-settings: "tnum";
+      font-feature-settings: "tnum";
+      /* iOSでテキスト選択を許可（コピーフォールバック用） */
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    .btn-copy {
+      -webkit-appearance: none;
+      appearance: none;
+      min-height: 44px;
+      padding: 10px 16px;
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-transition: opacity 0.15s;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-copy:active { opacity: 0.75; }
+    .btn-copy.copied { background: #10b981; }
+
+    /* リセット */
+    .reset-row {
+      text-align: center;
+      margin-top: 18px;
+    }
+
+    .btn-reset {
+      -webkit-appearance: none;
+      appearance: none;
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-decoration: underline;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      /* タップ対象を広げる */
+      padding: 10px 20px;
+      min-height: 44px;
+    }
+
+    .btn-reset:active { color: #ef4444; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>実労働時間タイマー</h1>
+
+  <div class="timer-display">
+    <div class="timer-label">実労働時間</div>
+    <div class="timer-value" id="mainTimer">00:00:00</div>
+    <div class="sub-times">
+      <div class="sub-item">
+        <div class="label">業務開始</div>
+        <div class="value" id="startTime">--:--</div>
+      </div>
+      <div class="sub-item">
+        <div class="label">中抜け合計</div>
+        <div class="value" id="breakTotal">00:00</div>
+      </div>
+      <div class="sub-item">
+        <div class="label">業務終了</div>
+        <div class="value" id="endTime">--:--</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-badge">
+    <span class="badge" id="statusBadge">未開始</span>
+  </div>
+
+  <div class="buttons">
+    <button class="btn btn-start"  id="btnStart"  onclick="workStart()">業務開始</button>
+    <button class="btn btn-end"    id="btnEnd"    onclick="workEnd()"    disabled>業務終了</button>
+    <button class="btn btn-break"  id="btnBreak"  onclick="breakStart()" disabled>中抜け開始</button>
+    <button class="btn btn-resume" id="btnResume" onclick="breakEnd()"   disabled>中抜け終了</button>
+  </div>
+
+  <div class="setting">
+    <span class="setting-label">休憩1時間を自動で差し引く</span>
+    <label class="toggle">
+      <input type="checkbox" id="autoBreak" onchange="updateTimer()">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="copy-section">
+    <div class="copy-label">本日の合計労働時間</div>
+    <div class="copy-row">
+      <input class="copy-text" id="copyValue" readonly value="--:--:--">
+      <button class="btn-copy" id="btnCopy" onclick="copyTime()">コピー</button>
+    </div>
+  </div>
+
+  <div class="reset-row">
+    <button class="btn-reset" onclick="resetAll()">リセット</button>
+  </div>
+</div>
+
+<script>
+  var state = {
+    phase: 'idle',
+    workStart: null,
+    workEnd: null,
+    breaks: [],
+    tickInterval: null
+  };
+
+  function pad(n) {
+    return n < 10 ? '0' + n : String(n);
+  }
+
+  function fmt(ms) {
+    var totalSec = Math.max(0, Math.floor(ms / 1000));
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    return pad(h) + ':' + pad(m) + ':' + pad(s);
+  }
+
+  function fmtHM(ms) {
+    var totalMin = Math.max(0, Math.floor(ms / 60000));
+    var h = Math.floor(totalMin / 60);
+    var m = totalMin % 60;
+    return pad(h) + ':' + pad(m);
+  }
+
+  // toLocaleTimeStringはロケール依存で不安定なため手動でフォーマット
+  function fmtClock(date) {
+    if (!date) return '--:--';
+    return pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  function calcBreakMs(now) {
+    var total = 0;
+    for (var i = 0; i < state.breaks.length; i++) {
+      var b = state.breaks[i];
+      // ?? 演算子はiOS13未満で非対応のため三項演算子で代替
+      var end = (b.end !== null && b.end !== undefined) ? b.end : now;
+      total += end - b.start;
+    }
+    return total;
+  }
+
+  function calcWorkMs(now) {
+    if (!state.workStart) return 0;
+    var to = (state.workEnd !== null && state.workEnd !== undefined) ? state.workEnd : now;
+    var elapsed = to - state.workStart;
+    var breakMs = calcBreakMs(now);
+    var autoMs = document.getElementById('autoBreak').checked ? 3600000 : 0;
+    return Math.max(0, elapsed - breakMs - autoMs);
+  }
+
+  function updateTimer() {
+    var now = new Date();
+    var workMs = calcWorkMs(now);
+    var breakMs = calcBreakMs(now);
+
+    document.getElementById('mainTimer').textContent   = fmt(workMs);
+    document.getElementById('breakTotal').textContent  = fmtHM(breakMs);
+    document.getElementById('startTime').textContent   = fmtClock(state.workStart);
+    document.getElementById('endTime').textContent     = fmtClock(state.workEnd);
+    document.getElementById('copyValue').value = state.workStart ? fmt(workMs) : '--:--:--';
+  }
+
+  function setStatus(phase) {
+    var badge = document.getElementById('statusBadge');
+    var texts   = { idle: '未開始', working: '業務中', breaking: '中抜け中', ended: '業務終了' };
+    var classes = { idle: '',       working: 'working', breaking: 'breaking', ended: 'ended'   };
+    badge.textContent = texts[phase];
+    badge.className   = 'badge ' + (classes[phase] || '');
+  }
+
+  function setButtons(phase) {
+    document.getElementById('btnStart').disabled  = (phase !== 'idle');
+    document.getElementById('btnEnd').disabled    = (phase !== 'working');
+    document.getElementById('btnBreak').disabled  = (phase !== 'working');
+    document.getElementById('btnResume').disabled = (phase !== 'breaking');
+  }
+
+  function workStart() {
+    state.workStart = new Date();
+    state.phase = 'working';
+    setStatus('working');
+    setButtons('working');
+    state.tickInterval = setInterval(updateTimer, 1000);
+    updateTimer();
+  }
+
+  function breakStart() {
+    state.breaks.push({ start: new Date(), end: null });
+    state.phase = 'breaking';
+    setStatus('breaking');
+    setButtons('breaking');
+  }
+
+  function breakEnd() {
+    var last = state.breaks[state.breaks.length - 1];
+    if (last && !last.end) last.end = new Date();
+    state.phase = 'working';
+    setStatus('working');
+    setButtons('working');
+    updateTimer();
+  }
+
+  function workEnd() {
+    var last = state.breaks[state.breaks.length - 1];
+    if (last && !last.end) last.end = new Date();
+    state.workEnd = new Date();
+    state.phase = 'ended';
+    clearInterval(state.tickInterval);
+    setStatus('ended');
+    setButtons('ended');
+    updateTimer();
+  }
+
+  // navigator.clipboard はHTTPS必須のためiOSローカルファイルでは動作しない。
+  // input.select() + execCommand('copy') をフォールバックとして使用。
+  function fallbackCopy(callback) {
+    var input = document.getElementById('copyValue');
+    input.removeAttribute('readonly');
+    input.focus();
+    input.setSelectionRange(0, 99999);
+    try {
+      if (document.execCommand('copy')) callback();
+    } catch (e) {}
+    input.setAttribute('readonly', '');
+    try { window.getSelection().removeAllRanges(); } catch (e) {}
+  }
+
+  function copyTime() {
+    var val = document.getElementById('copyValue').value;
+    if (val === '--:--:--') return;
+
+    var btn = document.getElementById('btnCopy');
+    function onSuccess() {
+      btn.textContent = 'コピー済み';
+      btn.classList.add('copied');
+      setTimeout(function () {
+        btn.textContent = 'コピー';
+        btn.classList.remove('copied');
+      }, 1800);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(val).then(onSuccess).catch(function () {
+        fallbackCopy(onSuccess);
+      });
+    } else {
+      fallbackCopy(onSuccess);
+    }
+  }
+
+  function resetAll() {
+    if (!confirm('タイマーをリセットしますか？')) return;
+    clearInterval(state.tickInterval);
+    state = { phase: 'idle', workStart: null, workEnd: null, breaks: [], tickInterval: null };
+    setStatus('idle');
+    setButtons('idle');
+    document.getElementById('mainTimer').textContent   = '00:00:00';
+    document.getElementById('startTime').textContent   = '--:--';
+    document.getElementById('endTime').textContent     = '--:--';
+    document.getElementById('breakTotal').textContent  = '00:00';
+    document.getElementById('copyValue').value = '--:--:--';
+  }
+</script>
+</body>
+</html>
